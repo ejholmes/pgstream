@@ -20,8 +20,7 @@ CREATE INDEX index_stream_on_logs ON logs USING btree (stream);
 Then initialize a new logstream engine:
 
 ```go
-rw := logstream.New(db)
-rw.Name = "1234"
+rw := logstream.New("mylogs", db)
 
 io.WriteString(rw, "Log line")
 
