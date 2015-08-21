@@ -1,6 +1,8 @@
 # LogStream
 
-LogStream is a Go package for streaming logs to and from a database.
+LogStream is a Go package that implements the [io.ReadWriter](http://golang.org/pkg/io/#ReadWriter) interface backed by posgres and [database/sql](http://golang.org/pkg/database/sql/).
+
+This allows you to pass around an `io.Reader` or `io.Writer` that can be shared across processes.
 
 ## Usage
 
@@ -17,10 +19,10 @@ CREATE TABLE logs (
 CREATE INDEX index_stream_on_logs ON logs USING btree (stream);
 ```
 
-Then initialize a new logstream engine:
+Then initialize a new pgstream engine:
 
 ```go
-rw := logstream.New("mylogs", db)
+rw := pgstream.New("mylogs", db)
 
 io.WriteString(rw, "Log line")
 

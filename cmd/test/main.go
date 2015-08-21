@@ -8,17 +8,17 @@ import (
 	"log"
 	"os"
 
-	"github.com/ejholmes/logstream"
+	"github.com/ejholmes/pgstream"
 	_ "github.com/lib/pq"
 )
 
 func main() {
-	db, err := sql.Open("postgres", "postgres://localhost/logstream?sslmode=disable")
+	db, err := sql.Open("postgres", "postgres://localhost/pgstream?sslmode=disable")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	rw := logstream.New("abcd", db)
+	rw := pgstream.New("abcd", db)
 
 	go func() {
 		if _, err := io.Copy(rw, os.Stdin); err != nil {

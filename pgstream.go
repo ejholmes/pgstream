@@ -1,4 +1,4 @@
-package logstream
+package pgstream
 
 import (
 	"bufio"

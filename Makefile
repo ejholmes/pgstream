@@ -1,6 +1,6 @@
 .PHONY: db
 
 db:
-	dropdb logstream
-	createdb logstream
-	psql -f schema.sql logstream
+	dropdb pgstream || true
+	createdb pgstream
+	psql -f schema.sql pgstream

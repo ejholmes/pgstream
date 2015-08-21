@@ -1,4 +1,4 @@
-package logstream
+package pgstream
 
 import (
 	"bytes"
@@ -89,7 +89,7 @@ func TestStream_ReadUntilClose(t *testing.T) {
 }
 
 func newDB(t *testing.T) *sql.DB {
-	db, err := sql.Open("postgres", "postgres://localhost/logstream?sslmode=disable")
+	db, err := sql.Open("postgres", "postgres://localhost/pgstream?sslmode=disable")
 	if err != nil {
 		t.Fatal(err)
 	}
