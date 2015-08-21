@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"io"
 	"strings"
+	"time"
 )
 
 const DefaultTable = "logs"
@@ -28,12 +29,13 @@ func (r *Stream) Read(p []byte) (int, error) {
 	var (
 		id  int
 		n   int
+		nn  int
 		err error
 	)
 
 	for err == nil {
-		var nn int
-		id, nn, err = r.read(p, id)
+		<-time.After(time.Second)
+		id, nn, err = r.read(p[n:len(p)], id)
 		n = n + nn
 	}
 
@@ -48,14 +50,14 @@ func (r *Stream) read(p []byte, start int) (int, int, error) {
 		idx int
 	)
 
-	rows, err := r.db.Query(`SELECT id, text, closed FROM `+r.table()+` WHERE id >= ? and stream = ?`, start, r.stream())
+	rows, err := r.db.Query(`SELECT id, text, closed FROM `+r.table()+` WHERE id > ? and stream = ?`, start, r.stream())
 	if err != nil {
 		return start, n, err
 	}
 	defer rows.Close()
 
 	var (
-		id     int
+		id     = start
 		text   string
 		closed bool
 	)

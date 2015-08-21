@@ -71,6 +71,8 @@ func TestStream_ReadUntilClose(t *testing.T) {
 		close(done)
 	}()
 
+	<-time.After(3 * time.Second)
+
 	io.WriteString(rw, "Foo")
 
 	if err := rw.Close(); err != nil {
