@@ -26,22 +26,42 @@ func NewStream(db *sql.DB) *Stream {
 
 func (r *Stream) Read(p []byte) (int, error) {
 	var (
+		id  int
+		n   int
+		err error
+	)
+
+	for err == nil {
+		var nn int
+		id, nn, err = r.read(p, id)
+		n = n + nn
+	}
+
+	return n, err
+}
+
+func (r *Stream) read(p []byte, start int) (int, int, error) {
+	var (
 		// Number of bytes read
 		n int
 		// Current index into p
 		idx int
 	)
 
-	rows, err := r.db.Query(`SELECT text FROM `+r.table()+` WHERE stream = ?`, r.stream())
+	rows, err := r.db.Query(`SELECT id, text, closed FROM `+r.table()+` WHERE id >= ? and stream = ?`, start, r.stream())
 	if err != nil {
-		return n, err
+		return start, n, err
 	}
 	defer rows.Close()
 
+	var (
+		id     int
+		text   string
+		closed bool
+	)
 	for rows.Next() {
-		var text string
-		if err := rows.Scan(&text); err != nil {
-			return n, err
+		if err := rows.Scan(&id, &text, &closed); err != nil {
+			return id, n, err
 		}
 
 		l := len(text)
@@ -49,9 +69,13 @@ func (r *Stream) Read(p []byte) (int, error) {
 		copy(p[idx:idx+l], []byte(text))
 		n = n + l
 		idx += l
+
+		if closed {
+			return id, n, io.EOF
+		}
 	}
 
-	return n, io.EOF
+	return id, n, nil
 }
 
 func (w *Stream) Write(p []byte) (int, error) {
@@ -87,6 +111,11 @@ func (w *Stream) Write(p []byte) (int, error) {
 	}
 
 	return read, nil
+}
+
+func (rw *Stream) Close() error {
+	_, err := rw.db.Exec(`UPDATE `+rw.table()+` SET closed = 1 WHERE id = (SELECT id FROM logs where stream = ? order by id desc limit 1)`, rw.stream())
+	return err
 }
 
 func (rw *Stream) table() string {
