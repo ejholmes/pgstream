@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"io"
 	"strings"
+	"time"
 )
 
 const DefaultTable = "logs"
@@ -17,6 +18,11 @@ type Stream struct {
 
 	db *sql.DB
 	id int
+
+	// Controls the amount of time to wait before making the next query when
+	// reading. This provides exponential backoff when there are no new
+	// records.
+	timeout time.Duration
 }
 
 func NewStream(db *sql.DB) *Stream {
@@ -28,6 +34,12 @@ func NewStream(db *sql.DB) *Stream {
 func (r *Stream) Read(p []byte) (n int, err error) {
 	// Current index into p
 	var idx int
+
+	// This means we're on atleast the second Read. We'll wait for the
+	// current timeout before making another query.
+	if r.id > 0 {
+		<-time.After(r.timeout)
+	}
 
 	rows, err := r.db.Query(`SELECT id, text, closed FROM `+r.table()+` WHERE id > $1 and stream = $2`, r.id, r.stream())
 	if err != nil {
@@ -67,6 +79,11 @@ func (r *Stream) Read(p []byte) (n int, err error) {
 			err = io.EOF
 			break
 		}
+	}
+
+	// This means the query didn't return any rows. Increase the timeout.
+	if id == 0 {
+		r.timeout = time.Second
 	}
 
 	return
