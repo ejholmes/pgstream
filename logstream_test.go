@@ -29,9 +29,7 @@ func TestStream(t *testing.T) {
 	const stream = "1234"
 
 	db := newDB(t)
-
-	rw := NewStream(db)
-	rw.Name = stream
+	rw := New(stream, db)
 
 	if _, err := io.Copy(rw, strings.NewReader(logs)); err != nil {
 		t.Fatal(err)
@@ -54,9 +52,7 @@ func TestStream_ReadUntilClose(t *testing.T) {
 	const stream = "1234"
 
 	db := newDB(t)
-
-	rw := NewStream(db)
-	rw.Name = stream
+	rw := New(stream, db)
 
 	if _, err := io.Copy(rw, strings.NewReader(logs)); err != nil {
 		t.Fatal(err)
@@ -74,6 +70,8 @@ func TestStream_ReadUntilClose(t *testing.T) {
 	if _, err := io.WriteString(rw, "Foo"); err != nil {
 		t.Fatal(err)
 	}
+
+	<-time.After(time.Second)
 
 	if err := rw.Close(); err != nil {
 		t.Fatal(err)

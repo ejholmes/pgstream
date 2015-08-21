@@ -14,10 +14,13 @@ const DefaultTable = "logs"
 type Stream struct {
 	// Table to write the log lines to.
 	Table string
-	Name  string
 
-	db *sql.DB
-	id int
+	// Unique identifier for the stream.
+	name string
+
+	db    *sql.DB
+	id    int
+	calls int
 
 	// Controls the amount of time to wait before making the next query when
 	// reading. This provides exponential backoff when there are no new
@@ -25,9 +28,10 @@ type Stream struct {
 	timeout time.Duration
 }
 
-func NewStream(db *sql.DB) *Stream {
+func New(name string, db *sql.DB) *Stream {
 	return &Stream{
-		db: db,
+		name: name,
+		db:   db,
 	}
 }
 
@@ -35,9 +39,10 @@ func (r *Stream) Read(p []byte) (n int, err error) {
 	// Current index into p
 	var idx int
 
+	r.calls += 1
 	// This means we're on atleast the second Read. We'll wait for the
 	// current timeout before making another query.
-	if r.id > 0 {
+	if r.calls > 0 {
 		<-time.After(r.timeout)
 	}
 
@@ -125,7 +130,7 @@ func (w *Stream) Write(p []byte) (int, error) {
 }
 
 func (rw *Stream) Close() error {
-	_, err := rw.db.Exec(`UPDATE `+rw.table()+` SET closed = true WHERE id = (SELECT id FROM `+rw.table()+` where stream = $1 order by id desc limit 1)`, rw.stream())
+	_, err := rw.db.Exec(`INSERT INTO `+rw.table()+`(stream, closed) VALUES ($1, $2)`, rw.stream(), true)
 	return err
 }
 
@@ -138,9 +143,9 @@ func (rw *Stream) table() string {
 }
 
 func (rw *Stream) stream() string {
-	if rw.Name == "" {
+	if rw.name == "" {
 		panic("No stream provided")
 	}
 
-	return rw.Name
+	return rw.name
 }

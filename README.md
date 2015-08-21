@@ -17,11 +17,10 @@ CREATE TABLE logs (
 Then initialize a new logstream engine:
 
 ```go
-engine := logstream.NewEngine(db)
-engine.Table = "logs" // Default
+rw := logstream.New(db)
+rw.Name = "1234"
 
-stream := engine.Stream("id")
-io.WriteString(stream, "Log line")
+io.WriteString(rw, "Log line")
 
-io.Copy(os.Stdout, stream)
+io.Copy(os.Stdout, rw)
 ```
