@@ -1,6 +1,6 @@
-# LogStream
+# PGStream
 
-LogStream is a Go package that implements the [io.ReadWriter](http://golang.org/pkg/io/#ReadWriter) interface backed by posgres and [database/sql](http://golang.org/pkg/database/sql/).
+PGStream is a Go package that implements the [io.ReadWriter](http://golang.org/pkg/io/#ReadWriter) interface backed by posgres and [database/sql](http://golang.org/pkg/database/sql/).
 
 This allows you to pass around an `io.Reader` or `io.Writer` that can be shared across processes.
 
