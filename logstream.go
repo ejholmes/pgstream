@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"io"
 	"strings"
-	"time"
 )
 
 const DefaultTable = "logs"
@@ -17,6 +16,7 @@ type Stream struct {
 	Name  string
 
 	db *sql.DB
+	id int
 }
 
 func NewStream(db *sql.DB) *Stream {
@@ -25,66 +25,58 @@ func NewStream(db *sql.DB) *Stream {
 	}
 }
 
-func (r *Stream) Read(p []byte) (int, error) {
-	var (
-		id  int
-		n   int
-		nn  int
-		err error
-	)
+func (r *Stream) Read(p []byte) (n int, err error) {
+	// Current index into p
+	var idx int
 
-	for err == nil {
-		<-time.After(time.Second)
-		id, nn, err = r.read(p[n:len(p)], id)
-		n = n + nn
-	}
-
-	return n, err
-}
-
-func (r *Stream) read(p []byte, start int) (int, int, error) {
-	var (
-		// Number of bytes read
-		n int
-		// Current index into p
-		idx int
-	)
-
-	rows, err := r.db.Query(`SELECT id, text, closed FROM `+r.table()+` WHERE id > ? and stream = ?`, start, r.stream())
+	rows, err := r.db.Query(`SELECT id, text, closed FROM `+r.table()+` WHERE id > $1 and stream = $2`, r.id, r.stream())
 	if err != nil {
-		return start, n, err
+		return n, err
 	}
 	defer rows.Close()
 
+	// Data about the log line.
 	var (
-		id     = start
-		text   string
+		id     int
+		text   []byte
 		closed bool
 	)
+
 	for rows.Next() {
-		if err := rows.Scan(&id, &text, &closed); err != nil {
-			return id, n, err
+		if err = rows.Scan(&id, &text, &closed); err != nil {
+			break
 		}
 
-		l := len(text)
+		// If we don't have enough space in p to copy the text, return
+		// what we have so Read can be called again.
+		if idx+len(text) > len(p) {
+			break
+		}
 
-		copy(p[idx:idx+l], []byte(text))
-		n = n + l
-		idx += l
+		// Set r.id so that calling Read again will only read new lines.
+		r.id = id
 
+		// Copy the text into the buffer.
+		copy(p[idx:idx+len(text)], text)
+		n += len(text)
+		idx += len(text)
+
+		// When the closed flag is set, we're at the last line. Return
+		// io.EOF to indicate the error.
 		if closed {
-			return id, n, io.EOF
+			err = io.EOF
+			break
 		}
 	}
 
-	return id, n, nil
+	return
 }
 
 func (w *Stream) Write(p []byte) (int, error) {
 	r := bufio.NewReader(bytes.NewReader(p))
 
 	createLine := func(text string) error {
-		q := `INSERT INTO ` + w.table() + `(stream, text) VALUES (?, ?)`
+		q := `INSERT INTO ` + w.table() + `(stream, text) VALUES ($1, $2)`
 		_, err := w.db.Exec(q, w.stream(), text)
 		return err
 	}
@@ -116,7 +108,7 @@ func (w *Stream) Write(p []byte) (int, error) {
 }
 
 func (rw *Stream) Close() error {
-	_, err := rw.db.Exec(`UPDATE `+rw.table()+` SET closed = 1 WHERE id = (SELECT id FROM logs where stream = ? order by id desc limit 1)`, rw.stream())
+	_, err := rw.db.Exec(`UPDATE `+rw.table()+` SET closed = true WHERE id = (SELECT id FROM `+rw.table()+` where stream = $1 order by id desc limit 1)`, rw.stream())
 	return err
 }
 

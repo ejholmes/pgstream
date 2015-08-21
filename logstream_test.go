@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 )
 
 const logs = `Let us take the river
@@ -71,9 +71,9 @@ func TestStream_ReadUntilClose(t *testing.T) {
 		close(done)
 	}()
 
-	<-time.After(3 * time.Second)
-
-	io.WriteString(rw, "Foo")
+	if _, err := io.WriteString(rw, "Foo"); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := rw.Close(); err != nil {
 		t.Fatal(err)
@@ -91,12 +91,12 @@ func TestStream_ReadUntilClose(t *testing.T) {
 }
 
 func newDB(t *testing.T) *sql.DB {
-	db, err := sql.Open("sqlite3", ":memory:")
+	db, err := sql.Open("postgres", "postgres://localhost/logstream?sslmode=disable")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := db.Exec(`CREATE TABLE logs (id integer not null primary key, stream text, text text, closed boolean not null default false)`); err != nil {
+	if _, err := db.Exec("TRUNCATE TABLE logs"); err != nil {
 		t.Fatal(err)
 	}
 
