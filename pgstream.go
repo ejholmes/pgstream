@@ -46,7 +46,7 @@ func (r *Stream) Read(p []byte) (n int, err error) {
 		<-time.After(r.timeout)
 	}
 
-	rows, err := r.db.Query(`SELECT id, text, closed FROM `+r.table()+` WHERE id > $1 and stream = $2`, r.id, r.stream())
+	rows, err := r.db.Query(`SELECT id, text FROM `+r.table()+` WHERE id > $1 and stream = $2`, r.id, r.stream())
 	if err != nil {
 		return n, err
 	}
@@ -54,15 +54,24 @@ func (r *Stream) Read(p []byte) (n int, err error) {
 
 	// Data about the log line.
 	var (
-		id     int
-		text   []byte
-		closed bool
+		id   int
+		ts   *[]byte
+		text []byte
 	)
 
 	for rows.Next() {
-		if err = rows.Scan(&id, &text, &closed); err != nil {
+		if err = rows.Scan(&id, &ts); err != nil {
 			break
 		}
+
+		// When the text is null, we're at the last line. Return
+		// io.EOF to indicate the error.
+		if ts == nil {
+			err = io.EOF
+			break
+		}
+
+		text = *ts
 
 		// If we don't have enough space in p to copy the text, return
 		// what we have so Read can be called again.
@@ -77,13 +86,6 @@ func (r *Stream) Read(p []byte) (n int, err error) {
 		copy(p[idx:idx+len(text)], text)
 		n += len(text)
 		idx += len(text)
-
-		// When the closed flag is set, we're at the last line. Return
-		// io.EOF to indicate the error.
-		if closed {
-			err = io.EOF
-			break
-		}
 	}
 
 	// This means the query didn't return any rows. Increase the timeout.
@@ -130,7 +132,7 @@ func (w *Stream) Write(p []byte) (int, error) {
 }
 
 func (rw *Stream) Close() error {
-	_, err := rw.db.Exec(`INSERT INTO `+rw.table()+`(stream, closed) VALUES ($1, $2)`, rw.stream(), true)
+	_, err := rw.db.Exec(`INSERT INTO `+rw.table()+`(stream, text) VALUES ($1, NULL)`, rw.stream())
 	return err
 }
 
