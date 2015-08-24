@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"database/sql"
 	"io"
-	"strings"
 	"time"
 )
 
@@ -99,7 +98,7 @@ func (r *Stream) Read(p []byte) (n int, err error) {
 func (w *Stream) Write(p []byte) (int, error) {
 	r := bufio.NewReader(bytes.NewReader(p))
 
-	createLine := func(text string) error {
+	createLine := func(text []byte) error {
 		q := `INSERT INTO ` + w.table() + `(stream, text) VALUES ($1, $2)`
 		_, err := w.db.Exec(q, w.stream(), text)
 		return err
@@ -110,20 +109,15 @@ func (w *Stream) Write(p []byte) (int, error) {
 	for {
 		b, err := r.ReadBytes('\n')
 
-		// Heroku may send a null character as a heartbeat signal. We
-		// want to strip out any null characters, as inserting them into
-		// postgres will cause an error.
-		line := strings.Replace(string(b), "\x00", "", -1)
-
 		if err != nil {
 			if err == io.EOF {
-				return read, createLine(line)
+				return read, createLine(b)
 			} else {
 				return read, err
 			}
 		}
 
-		if err := createLine(line); err != nil {
+		if err := createLine(b); err != nil {
 			return read, err
 		}
 	}
