@@ -45,7 +45,7 @@ type Stream struct {
 	timeout time.Duration
 }
 
-// Reads len(p) data from the stream into p.
+// Read reads data from this stream into p.
 func (r *Stream) Read(p []byte) (n int, err error) {
 	// Current index into p
 	var idx int
@@ -107,7 +107,8 @@ func (r *Stream) Read(p []byte) (n int, err error) {
 	return
 }
 
-// Writes the stream of data to the database.
+// Write splits p on newline characters and writes each individual line as a log
+// line record.
 func (w *Stream) Write(p []byte) (n int, err error) {
 	r := bufio.NewReader(bytes.NewReader(p))
 
@@ -139,6 +140,8 @@ func (w *Stream) Write(p []byte) (n int, err error) {
 	return
 }
 
+// Close closes the stream so that any subsequent calls to Read will return
+// io.EOF.
 func (rw *Stream) Close() error {
 	_, err := rw.db.Exec(`INSERT INTO `+rw.table()+`(stream, text) VALUES ($1, NULL)`, rw.stream())
 	return err
