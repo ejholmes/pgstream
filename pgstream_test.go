@@ -1,94 +1,81 @@
 package pgstream
 
 import (
-	"bytes"
 	"database/sql"
-	"io"
-	"strings"
+	"reflect"
 	"testing"
-	"time"
-
-	_ "github.com/lib/pq"
 )
 
-const logs = `Let us take the river
-path near Fall Hill.
+// Name of the test stream
+const stream = "stream"
 
-There we will negotiate
-an outcrop with its silvered
-initials & other bits of graffiti,
-
-all the way to the broken edge
-that overlooks the bend,
-& hold hands until
-
-we can no longer tell
-where the river ends.`
-
-func TestStream(t *testing.T) {
-	const stream = "1234"
-
-	db := newDB(t)
-	rw := New(stream, db)
-
-	if _, err := io.Copy(rw, strings.NewReader(logs)); err != nil {
-		t.Fatal(err)
-	}
-	if err := rw.Close(); err != nil {
-		t.Fatal(err)
+func TestStream_Write(t *testing.T) {
+	tests := []struct {
+		in  []byte
+		n   int
+		out []string
+	}{
+		{[]byte("hello world"), 11, []string{"hello world"}},
+		{[]byte("hello\nworld"), 11, []string{"hello\n", "world"}},
 	}
 
-	b := new(bytes.Buffer)
-	if _, err := io.Copy(b, rw); err != nil {
-		t.Fatal(err)
-	}
+	for _, tt := range tests {
+		db := newDB(t)
+		rw := db.Stream(stream)
 
-	if b.String() != logs {
-		t.Fatalf("Logs => %q", b.String())
-	}
-}
-
-func TestStream_ReadUntilClose(t *testing.T) {
-	const stream = "1234"
-
-	db := newDB(t)
-	rw := New(stream, db)
-
-	if _, err := io.Copy(rw, strings.NewReader(logs)); err != nil {
-		t.Fatal(err)
-	}
-
-	b := new(bytes.Buffer)
-	done := make(chan struct{})
-	go func() {
-		if _, err := io.Copy(b, rw); err != nil {
+		n, err := rw.Write(tt.in)
+		if err != nil {
 			t.Fatal(err)
 		}
-		close(done)
-	}()
 
-	if _, err := io.WriteString(rw, "Foo"); err != nil {
-		t.Fatal(err)
-	}
+		if got, want := n, tt.n; got != want {
+			t.Fatalf("n => %d; want %d", got, want)
+		}
 
-	<-time.After(time.Second)
-
-	if err := rw.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("timeout")
-	}
-
-	if b.String() != logs+"Foo" {
-		t.Fatalf("Logs => %q", b.String())
+		lines, err := logLines(rw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, want := lines, tt.out; !reflect.DeepEqual(got, want) {
+			t.Fatalf("lines => %v; want %v", got, want)
+		}
 	}
 }
 
-func newDB(t *testing.T) *sql.DB {
+func TestStream_Read(t *testing.T) {
+	tests := []struct {
+		lines [][]byte
+		out   string
+		n     int
+	}{
+		{[][]byte{[]byte("hello world")}, "hello world", 11},
+		{[][]byte{[]byte("hello\n"), []byte("world")}, "hello\nworld", 11},
+	}
+
+	for _, tt := range tests {
+		db := newDB(t)
+		rw := db.Stream(stream)
+
+		b := make([]byte, 32*1024)
+
+		for _, l := range tt.lines {
+			if err := rw.CreateLine(l); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		n, err := rw.Read(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got, want := n, tt.n; got != want {
+			t.Fatalf("n => %d; want %d", got, want)
+		}
+	}
+}
+
+func newDB(t *testing.T) *DB {
 	db, err := sql.Open("postgres", "postgres://localhost/pgstream?sslmode=disable")
 	if err != nil {
 		t.Fatal(err)
@@ -98,5 +85,32 @@ func newDB(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 
-	return db
+	return Open(db)
+}
+
+func logLines(s *Stream) ([]string, error) {
+	var lines []string
+
+	rows, err := s.Lines(0)
+	if err != nil {
+		return lines, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			id   int
+			text string
+		)
+		if err := rows.Scan(&id, &text); err != nil {
+			return lines, err
+		}
+		lines = append(lines, text)
+	}
+
+	return lines, nil
+}
+
+func String(s string) *string {
+	return &s
 }

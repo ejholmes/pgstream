@@ -18,7 +18,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	rw := pgstream.New("abcd", db)
+	rw := pgstream.Open(db).Stream("abcd")
 
 	go func() {
 		if _, err := io.Copy(rw, os.Stdin); err != nil {
