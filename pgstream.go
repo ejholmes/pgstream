@@ -95,7 +95,7 @@ func (r *Stream) Read(p []byte) (n int, err error) {
 	return
 }
 
-func (w *Stream) Write(p []byte) (int, error) {
+func (w *Stream) Write(p []byte) (n int, err error) {
 	r := bufio.NewReader(bytes.NewReader(p))
 
 	createLine := func(text []byte) error {
@@ -104,25 +104,31 @@ func (w *Stream) Write(p []byte) (int, error) {
 		return err
 	}
 
-	read := len(p)
+	var (
+		b   []byte
+		eof bool
+	)
 
-	for {
-		b, err := r.ReadBytes('\n')
+	// Reads out each line until eof, creating a log line in the database
+	// for each line.
+	for !eof {
+		b, err = r.ReadBytes('\n')
+		n += len(b)
 
 		if err != nil {
 			if err == io.EOF {
-				return read, createLine(b)
+				eof = true
 			} else {
-				return read, err
+				break
 			}
 		}
 
-		if err := createLine(b); err != nil {
-			return read, err
+		if err = createLine(b); err != nil {
+			break
 		}
 	}
 
-	return read, nil
+	return
 }
 
 func (rw *Stream) Close() error {
