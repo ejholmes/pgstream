@@ -11,9 +11,8 @@ First, create a table with the following schema:
 ```sql
 CREATE TABLE logs (
   id SERIAL,
-  stream text,
-  text text,
-  closed boolean not null default false
+  stream text not null,
+  text text
 );
 
 CREATE INDEX index_stream_on_logs ON logs USING btree (stream);
