@@ -35,7 +35,10 @@ type Stream struct {
 	// Unique identifier for the stream.
 	name string
 
-	db    *DB
+	db *DB
+
+	// This is used internally by Read to keep track of where it's read up
+	// to.
 	id    int
 	calls int
 
@@ -46,18 +49,18 @@ type Stream struct {
 }
 
 // Read reads data from this stream into p.
-func (r *Stream) Read(p []byte) (n int, err error) {
+func (rw *Stream) Read(p []byte) (n int, err error) {
 	// Current index into p
 	var idx int
 
-	r.calls += 1
+	rw.calls += 1
 	// This means we're on atleast the second Read. We'll wait for the
 	// current timeout before making another query.
-	if r.calls > 0 {
-		<-time.After(r.timeout)
+	if rw.calls > 0 {
+		<-time.After(rw.timeout)
 	}
 
-	rows, err := r.Lines(r.id)
+	rows, err := rw.Lines(rw.id)
 	if err != nil {
 		return n, err
 	}
@@ -91,7 +94,7 @@ func (r *Stream) Read(p []byte) (n int, err error) {
 		}
 
 		// Set r.id so that calling Read again will only read new lines.
-		r.id = id
+		rw.id = id
 
 		// Copy the text into the buffer.
 		copy(p[idx:idx+len(text)], text)
@@ -101,7 +104,7 @@ func (r *Stream) Read(p []byte) (n int, err error) {
 
 	// This means the query didn't return any rows. Increase the timeout.
 	if id == 0 {
-		r.timeout = time.Second
+		rw.timeout = time.Second
 	}
 
 	return
@@ -109,7 +112,7 @@ func (r *Stream) Read(p []byte) (n int, err error) {
 
 // Write splits p on newline characters and writes each individual line as a log
 // line record.
-func (w *Stream) Write(p []byte) (n int, err error) {
+func (rw *Stream) Write(p []byte) (n int, err error) {
 	r := bufio.NewReader(bytes.NewReader(p))
 
 	var (
@@ -132,7 +135,7 @@ func (w *Stream) Write(p []byte) (n int, err error) {
 			}
 		}
 
-		if err = w.CreateLine(b); err != nil {
+		if err = rw.CreateLine(b); err != nil {
 			break
 		}
 	}
