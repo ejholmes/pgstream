@@ -97,8 +97,7 @@ func (rw *Stream) Read(p []byte) (n int, err error) {
 		rw.id = id
 
 		// Copy the text into the buffer.
-		copy(p[idx:idx+len(text)], text)
-		n += len(text)
+		n += copy(p[idx:idx+len(text)], text)
 		idx += len(text)
 	}
 
